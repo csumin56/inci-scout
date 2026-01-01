@@ -40,3 +40,7 @@ a {
     color-scheme: dark;
   }
 }
+html, body {
+  background: #ffffff;
+  color: #111111;
+}
