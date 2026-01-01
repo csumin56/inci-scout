@@ -9,7 +9,7 @@ export default function Home() {
   const [status, setStatus] = useState("idle"); // idle | loading | done
   const [resultText, setResultText] = useState("");
 
-  const canAnalyze = !!imgUrl && status !== "loading";
+  const canAnalyze = !!imgUrl && status == "idle";
 
   function startAnalyze() {
     if (!imgUrl) return;
@@ -87,13 +87,25 @@ export default function Home() {
             padding: "10px 14px",
             borderRadius: 10,
             border: "1px solid #ddd",
-            background: canAnalyze ? "white" : "#f2f2f2",
+            background:
+              status === "done"
+                ? "#e8f5e9"
+                : status === "loading"
+                  ? "#fff3cd"
+                  : "white",
             color: "#111111",
             cursor: canAnalyze ? "pointer" : "not-allowed",
             fontWeight: 600,
           }}
+
         >
-          {status === "loading" ? "분석 중..." : "분석 시작"}
+          {
+          status === "loading"
+            ? "분석 중..."
+            : status === "done"
+            ? "분석 완료!"
+            : "분석 시작"
+          }
         </button>
 
         {!imgUrl && (
