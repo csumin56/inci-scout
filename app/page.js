@@ -15,6 +15,8 @@ export default function Home() {
   const [warnings, setWarnings] = useState([]);
   const [skinRec, setSkinRec] = useState("");
   const [evidence, setEvidence] = useState({});
+  const [confidence, setConfidence] = useState(null);
+
 
 
   const canAnalyze = !!imgFile && status == "idle";
@@ -67,6 +69,24 @@ export default function Home() {
       .replace(/\n+/g, "\n")
       .trim();
   }
+  function getConfidence({ ingredients, tags, rawText }) {
+    let score = 0;
+
+    // 성분 개수
+    if (ingredients.length >= 15) score += 2;
+    else if (ingredients.length >= 8) score += 1;
+
+    // 태그가 잡혔는지
+    if (tags.length >= 2) score += 1;
+
+    // OCR 원문 길이
+    if ((rawText || "").length >= 120) score += 1;
+
+    if (score >= 4) return { level: "high", msg: "인식 품질이 좋아요 👍" };
+    if (score >= 2) return { level: "mid", msg: "대체로 신뢰 가능해요 🙂" };
+    return { level: "low", msg: "인식 품질이 낮아요. 사진을 다시 찍어보세요 ⚠️" };
+  }
+
 
   function isValidIngredientToken(s) {
     if (!s) return false;
@@ -241,6 +261,40 @@ export default function Home() {
     },
   ];
 
+  const CATEGORY_ORDER = ["미백", "주름", "여드름", "수분", "장벽", "모공/피지"];
+  const TAG_STYLES = {
+    "미백": { background: "#fff4cc", borderColor: "#f1d06a", color: "#6b4b00" },
+    "주름": { background: "#e6f2ff", borderColor: "#7fb3ff", color: "#1f4f7a" },
+    "여드름": { background: "#ffe6e1", borderColor: "#ff9a8a", color: "#7a2d22" },
+    "수분": { background: "#e6f7f2", borderColor: "#7ad4bf", color: "#1e6154" },
+    "장벽": { background: "#eef7d6", borderColor: "#b9d97a", color: "#4a5f18" },
+    "모공/피지": { background: "#f0e8ff", borderColor: "#b79cff", color: "#4b2c7a" },
+  };
+
+  function getIngredientTag(ingredient) {
+    const upper = ingredient.toUpperCase();
+    for (const tag of CATEGORY_ORDER) {
+      const rule = RULES.find((r) => r.tag === tag);
+      if (!rule) continue;
+      if (rule.keys.some((k) => upper.includes(k))) return tag;
+    }
+    return null;
+  }
+
+  function getTagCounts(ingredients) {
+    const upper = ingredients.map((s) => s.toUpperCase());
+    const counts = {};
+    for (const tag of CATEGORY_ORDER) counts[tag] = 0;
+
+    for (const rule of RULES) {
+      for (const ing of upper) {
+        const hit = rule.keys.some((k) => ing.includes(k));
+        if (hit) counts[rule.tag] = (counts[rule.tag] || 0) + 1;
+      }
+    }
+
+    return counts;
+  }
 
   const WARN_KEYS = [
     { label: "향료/알러젠 가능", keys: ["FRAGRANCE", "PARFUM", "향료", "리모넨", "리날룰", "시트로넬롤", "제라니올"] },
@@ -335,6 +389,13 @@ export default function Home() {
       setEvidence(ev);
       setWarnings(w);
       setSkinRec(rec);
+      const conf = getConfidence({
+        ingredients: ing,
+        tags: t,
+        rawText: text,
+      });
+      setConfidence(conf);
+
 
       setStatus("done");
       setResultText(
@@ -352,6 +413,8 @@ export default function Home() {
       setEvidence({});
       setWarnings([]);
       setSkinRec("");
+      setConfidence(null);
+
 
       setStatus("done");
       setResultText("OCR 실패. 콘솔 에러를 확인해 주세요.");
@@ -362,12 +425,15 @@ export default function Home() {
     return (
       <main
         style={{
-          padding: 24,
+          padding: "clamp(16px, 3vw, 28px)",
           fontFamily: "system-ui",
-          maxWidth: 560,
+          maxWidth: "min(920px, 100%)",
+          width: "100%",
           backgroundColor: "#ffffff",
           color: "#111111",
           minHeight: "100vh",
+          margin: "0 auto",
+          boxSizing: "border-box",
         }}
       >
         <h1 style={{ marginBottom: 8 }}>INCI Scout</h1>
@@ -398,7 +464,7 @@ export default function Home() {
               src={imgUrl}
               alt="preview"
               style={{
-                maxWidth: 420,
+                maxWidth: "min(560px, 100%)",
                 width: "100%",
                 borderRadius: 12,
                 border: "1px solid #ddd",
@@ -443,26 +509,59 @@ export default function Home() {
             </span>
           )}
         </div>
+          {status === "done" && confidence && (
+          <section
+            style={{
+              marginTop: 16,
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #ddd",
+              background:
+                confidence.level === "high"
+                  ? "#e8f5e9"
+                  : confidence.level === "mid"
+                    ? "#fffde7"
+                    : "#fff3cd",
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            {confidence.msg}
+            {confidence.level === "low" && (
+              <div style={{ fontWeight: 400, marginTop: 4, opacity: 0.8 }}>
+                · 글자가 선명하게 보이도록 밝은 곳에서 찍어주세요<br />
+                · 성분표 전체가 프레임 안에 들어오게 해주세요
+              </div>
+            )}
+          </section>
+        )}
 
         {/* 결과 */}
         {status === "done" && ingredients.length > 0 && (
           <section style={{ marginTop: 16 }}>
             <h2 style={{ fontSize: 16, marginTop: 0 }}>성분 추출</h2>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {ingredients.slice(0, 60).map((it) => (
-                <span
-                  key={it}
-                  style={{
-                    border: "1px solid #ddd",
-                    padding: "4px 8px",
-                    borderRadius: 999,
-                    fontSize: 12,
-                    background: "white",
-                  }}
-                >
-                  {it}
-                </span>
-              ))}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, width: "100%" }}>
+              {ingredients.slice(0, 60).map((it) => {
+                const tag = getIngredientTag(it);
+                const chipStyle = tag ? TAG_STYLES[tag] : null;
+                return (
+                  <span
+                    key={it}
+                    title={tag ? `${tag} 관련 성분` : undefined}
+                    style={{
+                      border: "1px solid",
+                      borderColor: chipStyle?.borderColor || "#ddd",
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      background: chipStyle?.background || "white",
+                      color: chipStyle?.color || "#111111",
+                    }}
+                  >
+                    {it}
+                  </span>
+                );
+              })}
             </div>
             {ingredients.length > 60 && (
               <p style={{ fontSize: 12, opacity: 0.7 }}>너무 길어서 60개까지만 표시 중</p>
@@ -475,17 +574,150 @@ export default function Home() {
             {tags.length === 0 ? (
               <p style={{ opacity: 0.7 }}>아직 태그를 못 잡았어요. (사진 품질/성분 인식 문제일 수 있음)</p>
             ) : (
-              <ul>
-                {tags.map((t) => (
-                  <li key={t}>
-                    <b>{t}</b>
-                    {evidence?.[t]?.length ? (
-                      <span style={{ opacity: 0.75 }}> (근거: {evidence[t].join(", ")})</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {tags.map((t) => {
+                  const chipStyle = TAG_STYLES[t];
+                  return (
+                    <span
+                      key={t}
+                      style={{
+                        border: "1px solid",
+                        borderColor: chipStyle?.borderColor || "#ddd",
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        background: chipStyle?.background || "white",
+                        color: chipStyle?.color || "#111111",
+                      }}
+                    >
+                      {t}
+                      {evidence?.[t]?.length ? (
+                        <span style={{ opacity: 0.8, fontWeight: 400 }}>
+                          {" "}
+                          · {evidence[t].join(", ")}
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                })}
+              </div>
             )}
+          </section>
+        )}
+        {status === "done" && ingredients.length > 0 && (
+          <section style={{ marginTop: 16 }}>
+            <h2 style={{ fontSize: 16, marginTop: 0 }}>피부타입 다이어그램</h2>
+            {(() => {
+              const counts = getTagCounts(ingredients);
+              const values = CATEGORY_ORDER.map((t) => counts[t] || 0);
+              const maxValue = Math.max(1, ...values);
+              const size = 240;
+              const center = size / 2;
+              const radius = size * 0.36;
+              const angleStep = (Math.PI * 2) / CATEGORY_ORDER.length;
+
+              function pointAt(idx, r) {
+                const angle = -Math.PI / 2 + idx * angleStep;
+                const x = center + r * Math.cos(angle);
+                const y = center + r * Math.sin(angle);
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+              }
+
+              const gridLevels = [0.33, 0.66, 1];
+              const outlinePoints = CATEGORY_ORDER.map((_, i) => pointAt(i, radius)).join(" ");
+              const valuePoints = values
+                .map((v, i) => pointAt(i, (v / maxValue) * radius))
+                .join(" ");
+
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 16,
+                    alignItems: "center",
+                  }}
+                >
+                  <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                    {gridLevels.map((lv) => (
+                      <polygon
+                        key={lv}
+                        points={CATEGORY_ORDER.map((_, i) => pointAt(i, radius * lv)).join(" ")}
+                        fill="none"
+                        stroke="#e5e5e5"
+                        strokeWidth="1"
+                      />
+                    ))}
+                    {CATEGORY_ORDER.map((_, i) => (
+                      <line
+                        key={`axis-${i}`}
+                        x1={center}
+                        y1={center}
+                        x2={parseFloat(pointAt(i, radius).split(",")[0])}
+                        y2={parseFloat(pointAt(i, radius).split(",")[1])}
+                        stroke="#e5e5e5"
+                        strokeWidth="1"
+                      />
+                    ))}
+                    <polygon points={outlinePoints} fill="none" stroke="#cfcfcf" strokeWidth="1.5" />
+                    <polygon
+                      points={valuePoints}
+                      fill="rgba(55, 125, 255, 0.18)"
+                      stroke="rgba(55, 125, 255, 0.65)"
+                      strokeWidth="2"
+                    />
+                    {CATEGORY_ORDER.map((t, i) => {
+                      const angle = -Math.PI / 2 + i * angleStep;
+                      const labelRadius = radius + 18;
+                      const x = center + labelRadius * Math.cos(angle);
+                      const y = center + labelRadius * Math.sin(angle);
+                      return (
+                        <text
+                          key={`label-${t}`}
+                          x={x}
+                          y={y}
+                          fontSize="11"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#444"
+                        >
+                          {t}
+                        </text>
+                      );
+                    })}
+                  </svg>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      maxWidth: 300,
+                    }}
+                  >
+                    {CATEGORY_ORDER.map((t) => {
+                      const chipStyle = TAG_STYLES[t];
+                      return (
+                        <span
+                          key={`count-${t}`}
+                          style={{
+                            border: "1px solid",
+                            borderColor: chipStyle?.borderColor || "#ddd",
+                            padding: "4px 8px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            background: chipStyle?.background || "white",
+                            color: chipStyle?.color || "#111111",
+                          }}
+                        >
+                          {t} {counts[t] || 0}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </section>
         )}
         {status === "done" && (
@@ -505,24 +737,6 @@ export default function Home() {
             )}
           </section>
         )}
-
-
-        {status === "done" && (
-          <section
-            style={{
-              marginTop: 16,
-              padding: 12,
-              border: "1px solid #ddd",
-              borderRadius: 12,
-              background: "#fafafa",
-              whiteSpace: "pre-line",
-            }}
-          >
-            <h2 style={{ fontSize: 16, marginTop: 0 }}>결과</h2>
-            <p style={{ marginBottom: 0 }}>{resultText}</p>
-          </section>
-        )}
       </main>
     );
   }
-
