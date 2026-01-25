@@ -21,6 +21,7 @@ export default function Home() {
 
   const canAnalyze = !!imgFile && status == "idle";
 
+  // OCR 인식률을 높이기 위한 이미지 전처리
   async function preprocessImage(file) {
     const img = new Image();
     img.src = URL.createObjectURL(file);
@@ -58,6 +59,7 @@ export default function Home() {
 
     return blob;
   }
+  // OCR 결과를 성분 파싱에 맞게 정규화
   function normalizeText(raw) {
     if (!raw) return "";
     return raw
@@ -69,6 +71,7 @@ export default function Home() {
       .replace(/\n+/g, "\n")
       .trim();
   }
+  // 인식 품질을 간단 스코어로 판단
   function getConfidence({ ingredients, tags, rawText }) {
     let score = 0;
 
@@ -88,6 +91,7 @@ export default function Home() {
   }
 
 
+  // OCR 잡음 제거용 간단 필터
   function isValidIngredientToken(s) {
     if (!s) return false;
 
@@ -112,6 +116,7 @@ export default function Home() {
   }
 
 
+  // 텍스트에서 성분 리스트를 추출/정리
   function extractIngredients(cleanText) {
     // 1) 줄바꿈/쉼표 기준으로 쪼갬
     const rough = cleanText
@@ -193,6 +198,7 @@ export default function Home() {
     return finalOut;
 
   }
+  // 붙어버린 한글 성분 토큰 분리 힌트
   const ING_SPLIT_HINTS_KO = [
     "정제수", "글리세린", "부틸렌글라이콜", "프로필렌글라이콜",
     "나이아신아마이드", "판테놀", "히알루론산", "히알루론산나트륨",
@@ -201,7 +207,9 @@ export default function Home() {
     "티트리", "티트리잎오일", "향료", "리날룰", "리모넨"
   ];
 
+  // 성분 매칭 카테고리 순서
   const CATEGORY_ORDER = ["미백", "주름", "여드름", "수분", "장벽", "모공/피지"];
+  // 카테고리별 성분 키워드(한/영)
   const CATEGORY_KEYS = {
     "미백": [
       "나이아신아마이드", "NIACINAMIDE",
@@ -396,10 +404,12 @@ export default function Home() {
     ],
   };
 
+  // 태그 판별용 룰로 변환
   const RULES = CATEGORY_ORDER.map((tag) => ({
     tag,
     keys: CATEGORY_KEYS[tag] || [],
   }));
+  // 카테고리별 UI 컬러 스타일
   const TAG_STYLES = {
     "미백": { background: "#fff4cc", borderColor: "#f1d06a", color: "#6b4b00" },
     "주름": { background: "#e6f2ff", borderColor: "#7fb3ff", color: "#1f4f7a" },
@@ -409,6 +419,7 @@ export default function Home() {
     "모공/피지": { background: "#f0e8ff", borderColor: "#b79cff", color: "#4b2c7a" },
   };
 
+  // 성분이 어떤 카테고리에 속하는지 판별
   function getIngredientTag(ingredient) {
     const upper = ingredient.toUpperCase();
     for (const tag of CATEGORY_ORDER) {
@@ -419,6 +430,7 @@ export default function Home() {
     return null;
   }
 
+  // 카테고리별 성분 개수 집계
   function getTagCounts(ingredients) {
     const upper = ingredients.map((s) => s.toUpperCase());
     const counts = {};
@@ -434,6 +446,7 @@ export default function Home() {
     return counts;
   }
 
+  // 주의 성분 탐지 키워드
   const WARN_KEYS = [
     { label: "향료/알러젠 가능", keys: ["FRAGRANCE", "PARFUM", "향료", "리모넨", "리날룰", "시트로넬롤", "제라니올"] },
     { label: "알코올 주의", keys: ["ALCOHOL", "DENAT", "에탄올", "변성알코올", "알코올"] },
@@ -441,6 +454,7 @@ export default function Home() {
   ];
 
 
+  // 기능 태그/근거/주의 성분 추출
   function tagFeatures(ingredients) {
     const upper = ingredients.map((s) => s.toUpperCase());
 
@@ -475,6 +489,7 @@ export default function Home() {
     return { tags: Array.from(tags), evidence: evidenceOut, warnings };
   }
 
+  // 태그 조합으로 간단 피부타입 추천
   function recommendSkinType(tags, ingredients, warnings) {
     const upper = ingredients.map((s) => s.toUpperCase());
     const hasHydration = tags.includes("수분") || tags.includes("장벽");
@@ -493,6 +508,7 @@ export default function Home() {
     return "대체로 무난 (사진 품질/성분 추출 정확도에 따라 달라질 수 있음)";
   }
 
+  // OCR 파이프라인 실행
   async function startAnalyze() {
     if (!imgFile) return;
 
@@ -576,7 +592,17 @@ export default function Home() {
           boxSizing: "border-box",
         }}
       >
-        <h1 style={{ marginBottom: 8 }}>INCI Scout</h1>
+        <h1
+          style={{
+            marginBottom: 8,
+            fontSize: "clamp(28px, 4vw, 40px)",
+            fontWeight: 800,
+            color: "#1f5fbf",
+            letterSpacing: "-0.5px",
+          }}
+        >
+          INCI Scout
+        </h1>
         {/* 업로드 */}
         <div style={{ marginTop: 16 }}>
           <input
@@ -752,9 +778,9 @@ export default function Home() {
               const counts = getTagCounts(ingredients);
               const values = CATEGORY_ORDER.map((t) => counts[t] || 0);
               const maxValue = Math.max(1, ...values);
-              const size = 240;
+              const size = 260;
               const center = size / 2;
-              const radius = size * 0.36;
+              const radius = size * 0.38;
               const angleStep = (Math.PI * 2) / CATEGORY_ORDER.length;
 
               function pointAt(idx, r) {
@@ -764,7 +790,7 @@ export default function Home() {
                 return `${x.toFixed(1)},${y.toFixed(1)}`;
               }
 
-              const gridLevels = [0.33, 0.66, 1];
+              const gridLevels = [0.25, 0.5, 0.75, 1];
               const outlinePoints = CATEGORY_ORDER.map((_, i) => pointAt(i, radius)).join(" ");
               const valuePoints = values
                 .map((v, i) => pointAt(i, (v / maxValue) * radius))
@@ -780,12 +806,27 @@ export default function Home() {
                   }}
                 >
                   <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                    <defs>
+                      <radialGradient id="radarGlow" cx="50%" cy="50%" r="60%">
+                        <stop offset="0%" stopColor="rgba(31, 95, 191, 0.18)" />
+                        <stop offset="70%" stopColor="rgba(31, 95, 191, 0.06)" />
+                        <stop offset="100%" stopColor="rgba(31, 95, 191, 0)" />
+                      </radialGradient>
+                      <linearGradient id="radarFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="rgba(41, 120, 255, 0.28)" />
+                        <stop offset="100%" stopColor="rgba(13, 71, 161, 0.15)" />
+                      </linearGradient>
+                      <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="rgba(17, 45, 90, 0.2)" />
+                      </filter>
+                    </defs>
+                    <circle cx={center} cy={center} r={radius * 1.05} fill="url(#radarGlow)" />
                     {gridLevels.map((lv) => (
                       <polygon
                         key={lv}
                         points={CATEGORY_ORDER.map((_, i) => pointAt(i, radius * lv)).join(" ")}
                         fill="none"
-                        stroke="#e5e5e5"
+                        stroke="#e1e7f2"
                         strokeWidth="1"
                       />
                     ))}
@@ -796,20 +837,35 @@ export default function Home() {
                         y1={center}
                         x2={parseFloat(pointAt(i, radius).split(",")[0])}
                         y2={parseFloat(pointAt(i, radius).split(",")[1])}
-                        stroke="#e5e5e5"
+                        stroke="#dde6f5"
                         strokeWidth="1"
                       />
                     ))}
-                    <polygon points={outlinePoints} fill="none" stroke="#cfcfcf" strokeWidth="1.5" />
+                    <polygon points={outlinePoints} fill="none" stroke="#c6d3ea" strokeWidth="1.5" />
                     <polygon
                       points={valuePoints}
-                      fill="rgba(55, 125, 255, 0.18)"
-                      stroke="rgba(55, 125, 255, 0.65)"
+                      fill="url(#radarFill)"
+                      stroke="rgba(31, 95, 191, 0.7)"
                       strokeWidth="2"
+                      filter="url(#softShadow)"
                     />
                     {CATEGORY_ORDER.map((t, i) => {
+                      const pt = pointAt(i, (values[i] / maxValue) * radius).split(",");
+                      return (
+                        <circle
+                          key={`dot-${t}`}
+                          cx={pt[0]}
+                          cy={pt[1]}
+                          r="3.2"
+                          fill="#1f5fbf"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                        />
+                      );
+                    })}
+                    {CATEGORY_ORDER.map((t, i) => {
                       const angle = -Math.PI / 2 + i * angleStep;
-                      const labelRadius = radius + 18;
+                      const labelRadius = radius + 22;
                       const x = center + labelRadius * Math.cos(angle);
                       const y = center + labelRadius * Math.sin(angle);
                       return (
@@ -817,10 +873,10 @@ export default function Home() {
                           key={`label-${t}`}
                           x={x}
                           y={y}
-                          fontSize="11"
+                          fontSize="11.5"
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          fill="#444"
+                          fill="#1f2f4a"
                         >
                           {t}
                         </text>
